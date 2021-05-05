@@ -1,18 +1,24 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 
 # Bitwarden Quick Client
 # https://github.com/wwalker/bitwarden-quick-client
 # Released under the GPL v2
 
-# Hardcoded
-_bw_fuzzy_selector=rofi
-BW_RUNDIR="/run/user/$UID/bw/"
-mkdir -p "$BW_RUNDIR"
+# Return true is BW_DEBUG si set (to non-zero)
+_bw_is_debug(){
+  [[ -n "$BW_DEBUG" ]] && [[ "$BW_DEBUG" != "0" ]]
+}
 
-_basename=$( basename -- "$0" )
+# turn on tracing, if debug
+_bw_is_debug && set -x
+
 _bw_log(){
   # shellcheck disable=SC2059
   printf "$@" 1>&2
+}
+
+_bw_debug_log(){
+  _bw_is_debug && _bw_log "$@"
 }
 
 _bw_die(){
@@ -21,26 +27,42 @@ _bw_die(){
   exit 1
 }
 
+_bw_copy_to_clipboard(){
+  local value
+  value=$1
+
+  if [[ "$( uname -o )" == "Darwin" ]]
+  then
+    printf "%s" "$1" | tr -d '\r\n' | pbcopy
+  else
+    printf "%s" "$1" | tr -d '\r\n' | xclip -i -selection primary
+    printf "%s" "$1" | tr -d '\r\n' | xclip -i -selection clipboard
+  fi
+}
+
 bw_save_session_id(){
   export BW_SESSION="$1"
-  mkdir -p $BW_RUNDIR || { _bw_log "failed to mkdir a safe dir for the session id\n"; return 1; }
-  printf "%s" "$1" > $BW_RUNDIR/session_id
+  printf "%s" "$1" > "$BW_RUNDIR"/session_id
 }
 
 bw_load_session_id(){
   session_id_file=$BW_RUNDIR/session_id
   [[ -s $session_id_file ]] || return 0
-  BW_SESSION=$( cat $session_id_file )
+  BW_SESSION=$( cat "$session_id_file" )
   export BW_SESSION
 }
 
 bw_load_last_unlocked(){
-  bw_last_unlocked=$( cat $BW_RUNDIR/bw_last_unlocked )
+  local filename
+  bw_last_unlocked=0
+
+  filename="$BW_RUNDIR/bw_last_unlocked"
+  [[ -s $filename ]] && bw_last_unlocked=$( cat "$filename" )
 }
 
 bw_set_last_unlocked(){
   bw_last_unlocked=$EPOCHSECONDS
-  printf "%s" "$EPOCHSECONDS" > $BW_RUNDIR/bw_last_unlocked
+  printf "%s" "$EPOCHSECONDS" > "$BW_RUNDIR"/bw_last_unlocked
 }
 
 bw_recently_unlocked(){
@@ -56,7 +78,6 @@ bw_login(){
   [[ -z "$BW_SESSION" ]] && bw_load_session_id
   bw_recently_unlocked || bw_load_last_unlocked
   bw_recently_unlocked && return 0
-
 
   _bw_interactive_cmd=bw
   { [[ -z $(tty) ]] || [[ "not a tty" = "$(tty)" ]]; } && _bw_interactive_cmd=bw_run_in_terminal
@@ -143,50 +164,17 @@ bw_ls(){
   bw list items | jq -r '.[]|"\(.id) \(.name) \(.login.username) \(.login.uris[0].uri)"' | egrep "$a"
 }
 
-bwshow(){
+bw_show(){
   #for i in $( bw_ls "$@" | sed -e 's/.*\[id: //' -e 's/\]//' )
   for i in $( bw_ls "$@" | awkcol 1 )
   do
-    _bw_log "%s\n" "$i"
+    _bw_debug_log "%s\n" "$i"
     bw get item "$i"
   done | jq .
 }
 
-bwus(){
-  bwcopy Username: "$@"
-}
-
-bwpw(){
-  bwcopy Password: "$@"
-}
-
-bwcopy(){
-  field=$1
-  id=$( bw_ls "$2" | egrep '^[0-9][0-9]+ ' )
-  if [[ -z "$id" ]]
-  then
-    printf "No results for <%s>!\n" "$1"
-    return
-  fi
-
-  count=$( printf "%s\n" "$id" | wc -l )
-  if [[ "$count" != "1" ]]
-  then
-    printf "Too many results: <%s>!\n%s\n" "$count" "$id"
-    return
-  fi
-
-  if [[ "$( uname -o )" == "Darwin" ]]
-  then
-    bw show "${id%% *}" | grep "^$field" | awkcol 2 | tr -d '\r\n' | pbcopy
-  else
-    bw show "${id%% *}" | grep "^$field" | awkcol 2 | tr -d '\r\n' | xclip -i
-    bw show "${id%% *}" | grep "^$field" | awkcol 2 | tr -d '\r\n' | xclip -i -selection clipboard
-  fi
-}
-
 bw_get_selection(){
-  [[ -f $BW_RUNDIR/last-filter ]] && filter="-filter $( cat $BW_RUNDIR/last-filter )"
+  [[ -f $BW_RUNDIR/last-filter ]] && filter="-filter $( cat "$BW_RUNDIR"/last-filter )"
   printf "filter: %s\n" "$filter"
 
   printf "%s" "$ids" | $_bw_fuzzy_selector -matching regex -dmenu -format 'F:s' "$filter"
@@ -200,31 +188,28 @@ bw_main(){
 
   # shellcheck disable=SC2086
   selection=$( bw_get_selection )
-  _bw_log "selection: <%s>\n" "$selection"
+  _bw_debug_log "selection: <%s>\n" "$selection"
 
   filter=${selection%%\':*}
-  _bw_log "filter: <%s>\n" "$filter"
+  _bw_debug_log "filter: <%s>\n" "$filter"
 
   filter=${filter#\'}
-  _bw_log "filter: <%s>\n" "$filter"
+  _bw_debug_log "filter: <%s>\n" "$filter"
 
-  printf "%s\n" "$filter" > $BW_RUNDIR/last-filter
+  printf "%s\n" "$filter" > "$BW_RUNDIR"/last-filter
 
   id=${selection#*:}
-  _bw_log "id:\t<%s>\n" "$id"
+  _bw_debug_log "id:\t<%s>\n" "$id"
   id=${id%% *}
-  _bw_log "id:\t<%s>\n" "$id"
+  _bw_debug_log "id:\t<%s>\n" "$id"
 
   env | grep BW
   if [[ "$id" ]]
   then
     local value
     value=$( bw get "$lookingFor" "$id" )
-
-    printf "%s" "$value" | xclip -i -selection cliboard
-    printf "%s" "$value" | xclip -i -selection primary
+    _bw_copy_to_clipboard "$value"
   fi
-  clipboards
 }
 
 bwurl(){
@@ -283,12 +268,22 @@ bw_run_in_terminal(){
   exit "$rc"
 }
 
+# Hardcoded
+_bw_fuzzy_selector=rofi
+BW_RUNDIR="/run/user/$UID/bw/"
+
+_basename=$( basename -- "$0" )
+
 printf "%s\n" "${BASH_SOURCE[0]}"  "${0}"
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]
 then
-  echo "script ${BASH_SOURCE[0]} is being executed ..."
+  _bw_debug_log "script ${BASH_SOURCE[0]} is being executed ...\n"
 
+  mkdir -p $BW_RUNDIR || _bw_die "Failed to 'mkdir %s'. Cannot continue\n"
+
+  # special case to open a terminal when there is no TTY available yet
+  # the bw command being called requires a TTY
   if [[ "$1" = "in-terminal" ]]
   then
     shift
@@ -296,5 +291,10 @@ then
     exit $?
   fi
 
+  # Run the function name passed on the command line
+  # Sure hope you called an existing function....
   "$@"
+else
+  _bw_debug_log "script ${BASH_SOURCE[0]} is being sourced ...\n"
+  mkdir -p $BW_RUNDIR || _bw_log "Failed to 'mkdir %s'. Most likely, the functions just created will not work.\n"
 fi

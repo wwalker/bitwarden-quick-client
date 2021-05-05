@@ -1,7 +1,7 @@
 # bitwarden-quick-client
 bitwarden-quick-client
 
-For me, the [Bitwarden Desktop Application]( https://github.com/bitwarden/desktop ) is terribly slow ( 50 second startup time on a E3-1285L v4 @ 3.40GHz )and is huge from a screen real estate viewpoint.  The firefox browser integration almost never succeeds to autofill.  It also fails to icon to the panel for me.
+For me, the [Bitwarden Desktop Application]( https://github.com/bitwarden/desktop ) is terribly slow ( 50 second startup time on a Xeon E3-1285L v4 @ 3.40GHz )and is huge from a screen real estate viewpoint.  The firefox browser integration almost never succeeds to autofill.  It also fails to icon to the panel for me.
 
 Therefore, I have created a script that provides relatively fast ( 1 to 3 seconds ) access to data for a given site.  Currently, this script (and the functions it provides) are for bash ( only tested with v5.0.0+ ) only, and copy the result into the clipboard.  It is also dependent upon [`rofi`](https://github.com/davatorium/rofi), though `fzf`, `dmenu`, etc. could be plugged in rather easily.
 
@@ -10,6 +10,8 @@ Therefore, I have created a script that provides relatively fast ( 1 to 3 second
 `bitwarden-quick-client password <optional filter>`
 `bitwarden-quick-client username <optional filter>`
 `bitwarden-quick-client url <optional filter>`
+`bitwarden-quick-client bw_edit <uuid>`
+`bitwarden-quick-client bw_create <item name> <item url> <item username>`
 
 ### Set up your window manager to simplify usage:
 For i3:
