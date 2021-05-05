@@ -1,7 +1,15 @@
+#!/bin/bash -ex
+
 # Bitwarden Quick Client
 # https://github.com/wwalker/bitwarden-quick-client
 # Released under the GPL v2
 
+# Hardcoded
+_bw_fuzzy_selector=rofi
+BW_RUNDIR="/run/user/$UID/bw/"
+mkdir -p "$BW_RUNDIR"
+
+_basename=$( basename -- "$0" )
 _bw_log(){
   # shellcheck disable=SC2059
   printf "$@" 1>&2
@@ -15,25 +23,24 @@ _bw_die(){
 
 bw_save_session_id(){
   export BW_SESSION="$1"
-  # mkdir -p /run/user/$UID/bw
-  mkdir -p /run/user/$UID/bw || { _bw_log "failed to mkdir a safe dir for the session id\n"; return; }
-  printf "%s" "$1" > /run/user/$UID/bw/session_id
+  mkdir -p $BW_RUNDIR || { _bw_log "failed to mkdir a safe dir for the session id\n"; return 1; }
+  printf "%s" "$1" > $BW_RUNDIR/session_id
 }
 
 bw_load_session_id(){
-  session_id_file=/run/user/$UID/bw/session_id
-  [[ -s $session_id_file ]] || return 1
+  session_id_file=$BW_RUNDIR/session_id
+  [[ -s $session_id_file ]] || return 0
   BW_SESSION=$( cat $session_id_file )
   export BW_SESSION
 }
 
 bw_load_last_unlocked(){
-  bw_last_unlocked=$( cat /run/user/$UID/bw/bw_last_unlocked )
+  bw_last_unlocked=$( cat $BW_RUNDIR/bw_last_unlocked )
 }
 
 bw_set_last_unlocked(){
   bw_last_unlocked=$EPOCHSECONDS
-  printf "%s" "$EPOCHSECONDS" > /run/user/$UID/bw/bw_last_unlocked
+  printf "%s" "$EPOCHSECONDS" > $BW_RUNDIR/bw_last_unlocked
 }
 
 bw_recently_unlocked(){
@@ -50,27 +57,83 @@ bw_login(){
   bw_recently_unlocked || bw_load_last_unlocked
   bw_recently_unlocked && return 0
 
-  bw=bw
-  { [[ -z $(tty) ]] || [[ "not a tty" = "$(tty)" ]]; } && bw=xbw
+
+  _bw_interactive_cmd=bw
+  { [[ -z $(tty) ]] || [[ "not a tty" = "$(tty)" ]]; } && _bw_interactive_cmd=bw_run_in_terminal
 
   # if we are unlocked, then we are also logged in ... Nirvana
-  bw unlock --check 1>&2 && bw_set_last_unlocked; return 0
+  bw unlock --check 1>&2 && bw_set_last_unlocked && return 0
 
   if bw login --check 1>&2
   then
     # We are logged in but locked; so, we have to manually unlock
-    session=$( $bw unlock --raw ) || { _bw_log "Unlock failed: <%s>\n" "$session"; return 1; }
+    session=$( $_bw_interactive_cmd unlock --raw ) || { _bw_log "Unlock failed: <%s>\n" "$session"; return 1; }
   else
     # We are not even logged in, get our login if it's not provided
     [[ -z "$BW_EMAIL" ]] && read -r -t 20 -p 'Enter your login to lastpass: ' BW_EMAIL
     [[ -z "$BW_EMAIL" ]] && return 1
 
-    session=$( $bw login "$BW_EMAIL" --raw ) || { _bw_log "login failed"; return 1; }
+    session=$( $_bw_interactive_cmd login "$BW_EMAIL" --raw ) || { _bw_log "login failed"; return 1; }
   fi
 
   # We either unlocked or logged in, save the session
   bw_last_unlocked=$( date +%s );
   bw_save_session_id "$session"
+}
+
+bw_create(){
+  name="$1"
+  url="$2"
+  user="$3"
+
+  pass="$( bw generate -luns --length 24 )"
+  creation_date="$( date '+%FT%TZ' )"
+
+  # uuid="$( uuidgen )"
+  # "id": "$uuid",
+  cat > /tmp/bw_create.$$.json <<EOF
+{
+  "object": "item",
+  "organizationId": null,
+  "folderId": null,
+  "type": 1,
+  "name": "$name",
+  "notes": "",
+  "favorite": false,
+  "login": {
+    "uris": [
+      {
+        "match": null,
+        "uri": "$url"
+      }
+    ],
+    "username": "$user",
+    "password": "$pass",
+    "totp": null,
+    "passwordRevisionDate": null
+  },
+  "collectionIds": [],
+  "revisionDate": "$creation_date"
+}
+EOF
+  vim /tmp/bw_create.$$.json
+  bw encode < /tmp/bw_create.$$.json | bw create item
+  rm /tmp/bw_create.$$.json
+}
+
+bw_edit(){
+  if [[ -z $(tty) ]] || [[ "not a tty" = "$(tty)" ]]
+  then
+    printf "No tty available, exiting\n"
+    return 1
+  fi
+
+  bw_login
+
+  bw get item "$1" | jq . > /tmp/bw_edit.$$.json
+  vim /tmp/bw_edit.$$.json
+  bw encode < /tmp/bw_edit.$$.json | bw edit item "$1"
+  rm /tmp/bw_edit.$$.json
 }
 
 bw_ls(){
@@ -103,15 +166,15 @@ bwcopy(){
   if [[ -z "$id" ]]
   then
     printf "No results for <%s>!\n" "$1"
-    return 
+    return
   fi
 
   count=$( printf "%s\n" "$id" | wc -l )
   if [[ "$count" != "1" ]]
   then
     printf "Too many results: <%s>!\n%s\n" "$count" "$id"
-    return 
-  fi 
+    return
+  fi
 
   if [[ "$( uname -o )" == "Darwin" ]]
   then
@@ -122,21 +185,21 @@ bwcopy(){
   fi
 }
 
+bw_get_selection(){
+  [[ -f $BW_RUNDIR/last-filter ]] && filter="-filter $( cat $BW_RUNDIR/last-filter )"
+  printf "filter: %s\n" "$filter"
+
+  printf "%s" "$ids" | $_bw_fuzzy_selector -matching regex -dmenu -format 'F:s' "$filter"
+}
+
 bw_main(){
-  [[ -z "$lookingFor" ]] && _bw_die "Basename <%s> ain't right...."
-
-  # shellcheck disable=SC1090
-  [[ -e "$HOME/.bashrc.d/bw-func.bash" ]] && source "$HOME/.bashrc.d/bw-func.bash"
-
   bw_login
-  echo
 
   pattern=${1:-.}
   ids=$( bw_ls "$pattern" )
 
-  [[ -f /tmp/last-filter ]] && filter="-filter $( cat /tmp/last-filter )"
   # shellcheck disable=SC2086
-  selection=$( printf "%s" "$ids" | rofi -matching regex -dmenu -format 'F:s' $filter )
+  selection=$( bw_get_selection )
   _bw_log "selection: <%s>\n" "$selection"
 
   filter=${selection%%\':*}
@@ -145,7 +208,7 @@ bw_main(){
   filter=${filter#\'}
   _bw_log "filter: <%s>\n" "$filter"
 
-  printf "%s\n" "$filter" > /tmp/last-filter
+  printf "%s\n" "$filter" > $BW_RUNDIR/last-filter
 
   id=${selection#*:}
   _bw_log "id:\t<%s>\n" "$id"
@@ -188,7 +251,7 @@ bw_status(){
     unlocked)
       return 0
       ;;
-    locked) 
+    locked)
       printf "locked\n"
       return 2
       ;;
@@ -202,3 +265,36 @@ bw_status(){
       ;;
   esac
 }
+
+bw_in_terminal(){
+  pid=$1
+  shift
+
+  set +e
+  "$@" 2>&1 > /tmp/out."$pid" | tee /tmp/err."$pid"
+  echo $? > /tmp/rc."$pid"
+}
+
+bw_run_in_terminal(){
+  xterm -e "$_basename" in-terminal $$ bw "$@"
+  rc=$(cat /tmp/rc.$$)
+  [[ "$rc" = "0" ]] || cat /tmp/err.$$
+  cat /tmp/out.$$
+  exit "$rc"
+}
+
+printf "%s\n" "${BASH_SOURCE[0]}"  "${0}"
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]
+then
+  echo "script ${BASH_SOURCE[0]} is being executed ..."
+
+  if [[ "$1" = "in-terminal" ]]
+  then
+    shift
+    bw_in_terminal "$@"
+    exit $?
+  fi
+
+  "$@"
+fi
