@@ -230,9 +230,13 @@ bwpass(){
   bw_main "$@"
 }
 
-bw_url(){  bwurl  "$@"; }
-bw_user(){ bwuser "$@"; }
+bw-pass(){ bwpass "$@"; }
+bw-user(){ bwuser "$@"; }
+bw-url() { bwurl  "$@"; }
+
 bw_pass(){ bwpass "$@"; }
+bw_user(){ bwuser "$@"; }
+bw_url() { bwurl  "$@"; }
 
 bw_status(){
   local status
