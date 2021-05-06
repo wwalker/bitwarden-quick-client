@@ -11,6 +11,7 @@ _bw_is_debug(){
 
 # turn on tracing, if debug
 _bw_is_debug && set -x
+# set +x for when you want debug logging, but not tracing
 
 _bw_log(){
   # shellcheck disable=SC2059
@@ -174,10 +175,12 @@ bw_show(){
 }
 
 bw_get_selection(){
+  local filter
   [[ -f $BW_RUNDIR/last-filter ]] && filter="-filter $( cat "$BW_RUNDIR"/last-filter )"
-  printf "filter: %s\n" "$filter"
+  _bw_debug_log "filter: %s\n" "$filter"
 
-  printf "%s" "$ids" | $_bw_fuzzy_selector -matching regex -dmenu -format 'F:s' "$filter"
+  # shellcheck disable=SC2086
+  printf "%s" "$ids" | $_bw_fuzzy_selector -matching regex -dmenu -format 'F:s' $filter
 }
 
 bw_main(){
@@ -203,7 +206,7 @@ bw_main(){
   id=${id%% *}
   _bw_debug_log "id:\t<%s>\n" "$id"
 
-  env | grep BW
+  _bw_is_debug && env | grep BW
   if [[ "$id" ]]
   then
     local value
@@ -226,6 +229,10 @@ bwpass(){
   lookingFor=password
   bw_main "$@"
 }
+
+bw_url(){  bwurl  "$@"; }
+bw_user(){ bwuser "$@"; }
+bw_pass(){ bwpass "$@"; }
 
 bw_status(){
   local status
@@ -274,7 +281,7 @@ BW_RUNDIR="/run/user/$UID/bw/"
 
 _basename=$( basename -- "$0" )
 
-printf "%s\n" "${BASH_SOURCE[0]}"  "${0}"
+_bw_debug_log "%s\n" "${BASH_SOURCE[0]}"  "${0}"
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]
 then
