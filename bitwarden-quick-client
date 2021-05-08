@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 
 # Bitwarden Quick Client
 # https://github.com/wwalker/bitwarden-quick-client
@@ -20,6 +20,7 @@ _bw_log(){
 
 _bw_debug_log(){
   _bw_is_debug && _bw_log "$@"
+  return 0
 }
 
 _bw_die(){
@@ -59,6 +60,7 @@ bw_load_last_unlocked(){
 
   filename="$BW_RUNDIR/bw_last_unlocked"
   [[ -s $filename ]] && bw_last_unlocked=$( cat "$filename" )
+  return 0
 }
 
 bw_set_last_unlocked(){
