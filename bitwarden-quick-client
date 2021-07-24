@@ -105,6 +105,10 @@ bw_login(){
   bw_save_session_id "$session"
 }
 
+bw_generate(){
+  bw generate -luns --length 24
+}
+
 bw_create(){
   name="$1"
   url="$2"
