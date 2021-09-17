@@ -217,7 +217,7 @@ bw_main(){
   then
     local value
     value=$( bw get "$lookingFor" "$id" )
-    _bw_copy_to_clipboard "$value"
+    xdotool type "$value"
   fi
 }
 
