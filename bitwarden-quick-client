@@ -217,7 +217,7 @@ bw_main(){
   then
     local value
     value=$( bw get "$lookingFor" "$id" )
-    xdotool type "$value"
+    xdotool type --clearmodifiers "$value"
   fi
 }
 
