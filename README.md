@@ -1,6 +1,13 @@
 # bitwarden-quick-client
 bitwarden-quick-client
 
+NOTE: I recommend looking into these projects instead.  They are both more polished than this project by far.
+
+github.com:mattydebie/bitwarden-rofi
+git@github.com:fdw/rofi-rbw
+
+The rest of this is just left here for legacy info.
+
 For me, the [Bitwarden Desktop Application]( https://github.com/bitwarden/desktop ) is terribly slow ( 50 second startup time on a Xeon E3-1285L v4 @ 3.40GHz )and is huge from a screen real estate viewpoint.  The firefox browser integration almost never succeeds to autofill.  It also fails to icon to the panel for me.
 
 Therefore, I have created a script that provides relatively fast ( 1 to 3 seconds ) access to data for a given site.  Currently, this script (and the functions it provides) are for bash ( only tested with v5.0.0+ ) only, and copy the result into the clipboard.  It is also dependent upon [`rofi`](https://github.com/davatorium/rofi), though `fzf`, `dmenu`, etc. could be plugged in rather easily.
