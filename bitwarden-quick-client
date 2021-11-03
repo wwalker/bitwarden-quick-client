@@ -146,7 +146,7 @@ bw_create(){
 EOF
   vim /tmp/bw_create.$$.json
   bw encode < /tmp/bw_create.$$.json | bw create item
-  rm /tmp/bw_create.$$.json
+  \rm /tmp/bw_create.$$.json
 }
 
 bw_edit(){
@@ -161,7 +161,7 @@ bw_edit(){
   bw get item "$1" | jq . > /tmp/bw_edit.$$.json
   vim /tmp/bw_edit.$$.json
   bw encode < /tmp/bw_edit.$$.json | bw edit item "$1"
-  rm /tmp/bw_edit.$$.json
+  \rm /tmp/bw_edit.$$.json
 }
 
 bw_ls(){
