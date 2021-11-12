@@ -194,8 +194,7 @@ bw_get_selection(){
 bw_main(){
   bw_login
 
-  lookingFor=$1
-  pattern=${lookingFor:-.}
+  pattern=${1:-.}
   ids=$( bw_ls "$pattern" )
 
   # shellcheck disable=SC2086
