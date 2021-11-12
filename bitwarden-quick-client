@@ -6,12 +6,14 @@
 
 # Return true is BW_DEBUG si set (to non-zero)
 _bw_is_debug(){
-  [[ -n "$BW_DEBUG" ]] && [[ "$BW_DEBUG" != "0" ]]
+[[ -n "$BW_DEBUG" ]] && [[ "$BW_DEBUG" != "0" ]]
 }
 
 # turn on tracing, if debug
 _bw_is_debug && set -x
 # set +x for when you want debug logging, but not tracing
+
+BEEP=${BEEP:-beep}
 
 _bw_log(){
   # shellcheck disable=SC2059
@@ -192,7 +194,8 @@ bw_get_selection(){
 bw_main(){
   bw_login
 
-  pattern=${1:-.}
+  lookingFor=$1
+  pattern=${lookingFor:-.}
   ids=$( bw_ls "$pattern" )
 
   # shellcheck disable=SC2086
@@ -219,6 +222,7 @@ bw_main(){
     value=$( bw get "$lookingFor" "$id" )
     xdotool type --clearmodifiers "$value"
   fi
+  [[ "$lookingFor" = "password" ]] && $BEEP
 }
 
 bwurl(){
@@ -315,3 +319,5 @@ else
   _bw_debug_log "script ${BASH_SOURCE[0]} is being sourced ...\n"
   mkdir -p $BW_RUNDIR || _bw_log "Failed to 'mkdir %s'. Most likely, the functions just created will not work.\n"
 fi
+# turn off tracing, if debug
+_bw_is_debug && set +x
