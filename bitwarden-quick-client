@@ -90,17 +90,19 @@ bw_login(){
   # if we are unlocked, then we are also logged in ... Nirvana
   bw unlock --check 1>&2 && bw_set_last_unlocked && return 0
 
-  if bw login --check 1>&2
-  then
-    # We are logged in but locked; so, we have to manually unlock
-    session=$( $_bw_interactive_cmd unlock --raw ) || { _bw_log "Unlock failed: <%s>\n" "$session"; return 1; }
-  else
-    # We are not even logged in, get our login if it's not provided
+  bw logout
+
+  # if bw login --check 1>&2
+  # then
+  #   # We are logged in but locked; so, we have to manually unlock
+  #   session=$( $_bw_interactive_cmd unlock --raw ) || { _bw_log "Unlock failed: <%s>\n" "$session"; return 1; }
+  # else
+  #   # We are not even logged in, get our login if it's not provided
     [[ -z "$BW_EMAIL" ]] && read -r -t 20 -p 'Enter your login to lastpass: ' BW_EMAIL
     [[ -z "$BW_EMAIL" ]] && return 1
 
     session=$( $_bw_interactive_cmd login "$BW_EMAIL" --raw ) || { _bw_log "login failed"; return 1; }
-  fi
+  # fi
 
   # We either unlocked or logged in, save the session
   bw_last_unlocked=$( date +%s );
@@ -148,7 +150,7 @@ bw_create(){
 EOF
   vim /tmp/bw_create.$$.json
   bw encode < /tmp/bw_create.$$.json | bw create item
-  \rm /tmp/bw_create.$$.json
+  /bin/rm /tmp/bw_create.$$.json
 }
 
 bw_edit(){
@@ -163,7 +165,7 @@ bw_edit(){
   bw get item "$1" | jq . > /tmp/bw_edit.$$.json
   vim /tmp/bw_edit.$$.json
   bw encode < /tmp/bw_edit.$$.json | bw edit item "$1"
-  \rm /tmp/bw_edit.$$.json
+  /bin/rm /tmp/bw_edit.$$.json
 }
 
 bw_ls(){
@@ -184,8 +186,11 @@ bw_show(){
 
 bw_get_selection(){
   local filter
+
   [[ -f $BW_RUNDIR/last-filter ]] && filter="-filter $( cat "$BW_RUNDIR"/last-filter )"
   _bw_debug_log "filter: %s\n" "$filter"
+
+  [[ -n "$1" ]] && [[ "$1" != '.' ]] && filter="$1"
 
   # shellcheck disable=SC2086
   printf "%s" "$ids" | $_bw_fuzzy_selector -matching regex -dmenu -format 'F:s' $filter
