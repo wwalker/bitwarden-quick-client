@@ -84,6 +84,7 @@ bw_login(){
   bw_recently_unlocked || bw_load_last_unlocked
   bw_recently_unlocked && return 0
 
+  _bw_interactive_cmd=rbw
   _bw_interactive_cmd=bw
   { [[ -z $(tty) ]] || [[ "not a tty" = "$(tty)" ]]; } && _bw_interactive_cmd=bw_run_in_terminal
 
